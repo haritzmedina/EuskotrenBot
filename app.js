@@ -1,66 +1,109 @@
 'use strict';
+
+// START REQUIRES
+
 // Botkit
 var Botkit = require('botkit');
 
 // Cheerio
 var cheerio = require('cheerio');
 
-
-// jQuery
-var jsdom = require('jsdom');
-var $ = null;
-let promise = new Promise(function(resolve, reject){
-  require("jsdom").env("", function(err, window) {
-    console.log('executed');
-    if (err) {
-      console.error(err);
-      reject(err);
-      return;
-    }
-    $ = require("jquery")(window);
-    resolve({});
-  });
-});
-
 // Request
 var request = require('request');
 
-var controller = Botkit.slackbot();
-var bot = controller.spawn({
-  // TODO remember not to share this one!
-  token: "xoxb-53284146082-buRxEaBiI4PvC6j57hfxmmXi"
-});
+// Properties file reader
+var PropertiesReader = require('properties-reader');
 
-bot.startRTM(function(err,bot,payload) {
-  if (err) {
-    throw new Error('Could not connect to Slack');
-  }
-});
 
-promise.then(function(){
-  request.post('http://www.euskotren.eus/es/horarios',{
-    form:{
-      origen: 'ER',
-      destino: 'SS',
-      dia: '27',
-      mes: '20166',
-      hora: '1130',
-      form_id: 'horarios_form'
+// END REQUIRES
+
+var Onekin = {};
+Onekin.Euskotren = {};
+
+Onekin.Euskotren.init = function(){
+  // Create slack bot instance
+  Onekin.Euskotren.slackbotController = Botkit.slackbot();
+
+// Retrieve slack bot token from properties file
+  var properties = PropertiesReader('configuration.properties');
+
+  Onekin.Euskotren.bot = Onekin.Euskotren.slackbotController.spawn({
+    token: properties.get('onekin.slack.token')
+  });
+
+  Onekin.Euskotren.bot.startRTM(function(err,bot,payload) {
+    if (err) {
+      throw new Error('Could not connect to Slack');
     }
-  }, function(error, response, html){
+  });
+
+  // Retrieve stations name and code correspondence
+
+  Onekin.Euskotren.stations = {};
+
+  request('http://www.euskotren.eus/es/horarios', function(error, response, html){
     if(!error){
-      var $ = cheerio.load(html);
-      console.log($('#horarios-tabla').find('.salida')[1].firstChild.data);
+      let $ = cheerio.load(html);
+
+      $('#edit-destino').find('option').each((id, val) => {
+        let stationCode = val.attribs.value;
+        if(stationCode){
+          let stationName = val.children[0].data;
+          Onekin.Euskotren.stations[stationName.toLowerCase()] = stationCode;
+        }
+      });
     }
+  });
+};
+
+Onekin.Euskotren.init();
+
+Onekin.Euskotren.slackbotController.hears(["show me next train from (.*) to (.*)","^pattern$"],["direct_message","direct_mention","mention","ambient"],function(bot,message) {
+  // Retrieve introduced stations
+  let originStationName = message.match[1];
+  let destinationStationName = message.match[2];
+
+  // TODO Search for code to send query
+  let originCode = Onekin.Euskotren.stations[originStationName.toLowerCase()];
+  let destinationCode = Onekin.Euskotren.stations[destinationStationName.toLowerCase()];
+
+  Onekin.Euskotren.retrieveDepartures(originCode, destinationCode, new Date(), function(departures){
+    Onekin.Euskotren.bot.reply(message,'Next train from '+ originStationName +' to ' +destinationStationName+'' +
+        ' will depart at '+departures.toString());
   });
 });
 
+Onekin.Euskotren.retrieveDepartures = function(originCode, destinationCode, date, callback){
+  // Prepare query to euskotren horarios website
+  let queryParams = {};
+  queryParams.origen = originCode;
+  queryParams.destino = destinationCode;
+  queryParams.dia = date.getDate()+"";
+  queryParams.mes = date.getFullYear()+""+(date.getMonth()+1);
+  queryParams.hora = date.getHours()+""+(parseInt((date.getMinutes() + 7.5)/15) * 15) % 60; // Round to quarters 00,15,30,45
+  queryParams.form_id = 'horarios_form';
+  console.log(queryParams);
 
+  // Prepare query
+  request.post('http://www.euskotren.eus/es/horarios',{
+    form: queryParams
+  }, function(error, response, html){
+    if(!error){
+      // Load response DOM
+      let $ = cheerio.load(html);
 
-controller.hears(["keyword","^pattern$"],["direct_message","direct_mention","mention","ambient"],function(bot,message) {
-  // do something to respond to message
-  // all of the fields available in a normal Slack message object are available
-  // https://api.slack.com/events/message
-  bot.reply(message,'You used a keyword!');
-
-});
+      // TODO Retrieve departures
+      let departures = [];
+      let resultsTable = $('#horarios-tabla').find('.salida');
+      // Check if exists departures
+      if(resultsTable){
+        departures[0] = resultsTable[1].firstChild.data;
+        // Callback with departures
+        callback(departures);
+      }
+      else{
+        callback('NoDepartures');
+      }
+    }
+  });
+};
