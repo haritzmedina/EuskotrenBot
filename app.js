@@ -71,8 +71,16 @@ Onekin.Euskotren.slackbotController.hears(["show me next train from (.*) to (.*)
   let destinationCode = Onekin.Euskotren.stations[destinationStationName.toLowerCase()];
 
   Onekin.Euskotren.retrieveDepartures(originCode, destinationCode, new Date(), function(departures){
-    Onekin.Euskotren.bot.reply(message,'Next train from '+ originStationName +' to ' +destinationStationName+'' +
-        ' will depart at '+departures.toString());
+    if(departures==='NoDepartures'){
+      Onekin.Euskotren.bot.reply(message, 'No departures retrieved from '+ originStationName +' to ' +destinationStationName);
+    }
+    else if(departures==='NoOrigOrDest'){
+      Onekin.Euskotren.bot.reply(message, 'Origin or destination is not a euskotren station');
+    }
+    else{
+      Onekin.Euskotren.bot.reply(message,'Next trains from '+ originStationName +' to ' +destinationStationName+'' +
+          ' will depart at '+departures.toString());
+    }
   });
 });
 
@@ -83,30 +91,45 @@ Onekin.Euskotren.retrieveDepartures = function(originCode, destinationCode, date
   queryParams.destino = destinationCode;
   queryParams.dia = date.getDate()+"";
   queryParams.mes = date.getFullYear()+""+(date.getMonth()+1);
-  queryParams.hora = date.getHours()+""+(parseInt((date.getMinutes() + 7.5)/15) * 15) % 60; // Round to quarters 00,15,30,45
+  console.log((new Date()).toString());
+  // Round to quarters 00,15,30,45
+  let minutes = ((parseInt((date.getMinutes() + 7.5)/15) * 15) % 60);
+  minutes = minutes===0?'00':minutes;
+  queryParams.hora = date.getHours()+""+minutes;
   queryParams.form_id = 'horarios_form';
   console.log(queryParams);
 
-  // Prepare query
-  request.post('http://www.euskotren.eus/es/horarios',{
-    form: queryParams
-  }, function(error, response, html){
-    if(!error){
-      // Load response DOM
-      let $ = cheerio.load(html);
+  // If origin and destination is well written request webpage
+  if(queryParams.origen && queryParams.destino){
+    // Prepare query
+    request.post('http://www.euskotren.eus/es/horarios',{
+      form: queryParams
+    }, function(error, response, html){
+      if(!error) {
+        // Load response DOM
+        let $ = cheerio.load(html);
 
-      // TODO Retrieve departures
-      let departures = [];
-      let resultsTable = $('#horarios-tabla').find('.salida');
-      // Check if exists departures
-      if(resultsTable){
-        departures[0] = resultsTable[1].firstChild.data;
-        // Callback with departures
-        callback(departures);
+        // Retrieve departures
+        let departures = [];
+        let resultsTable = $('#horarios-tabla').find('.salida');
+        // Retrieve next (max 4) departures if exists anyone
+        if (resultsTable[1]) {
+          for (let i = 1; i < 5; i++) {
+            if (resultsTable[i]) {
+              departures.push(resultsTable[i].firstChild.data);
+            }
+          }
+          // Callback with departures
+          callback(departures);
+        }
+        else {
+          // No departures found
+          callback('NoDepartures');
+        }
       }
-      else{
-        callback('NoDepartures');
-      }
-    }
-  });
+    });
+  }
+  else{
+    callback('NoOrigOrDest');
+  }
 };
