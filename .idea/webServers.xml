@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="0bfb527f-68c2-497c-aedc-21fd9b95aa71" name="euskotrenbot.haritzmedina.com" url="https://euskotrenbot.haritzmedina.com">
+        <fileTransfer host="haritzmedina.com" port="22" privateKey="E:\Haritz\Documentos\pirque putty.ppk" rootFolder="/opt/servers/euskotrenbot" accessType="SFTP" passphrase="dffedfd8dfc5dfc2dfcbdfc4dfc2dfcbdfc7dfc8dfcfdfd8df9adf9ddf8c" username="admin" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

@@ -14,7 +14,6 @@ var request = require('request');
 // Properties file reader
 var PropertiesReader = require('properties-reader');
 
-
 // END REQUIRES
 
 var Onekin = {};
@@ -57,6 +56,10 @@ Onekin.Euskotren.init = function(){
 };
 
 Onekin.Euskotren.init();
+
+Onekin.Euskotren.slackbotController.hears(["help", "^pattern$"], ["direct_message"], function(bot, message){
+  Onekin.Euskotren.bot.reply(message, 'Usage example: "show me next train from Ermua to Amara"');
+});
 
 Onekin.Euskotren.slackbotController.hears(["show me next train from (.*) to (.*)","^pattern$"],["direct_message","direct_mention","mention","ambient"],function(bot,message) {
   // Retrieve introduced stations
